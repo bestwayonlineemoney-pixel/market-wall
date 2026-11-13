@@ -1,0 +1,853 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>
+  :root{
+    --bg:#000; --panel:#0b0d12; --panel-2:#0e1118; --card:#0d1017; --line:#1a1f29; --line-2:#141922;
+    --fg:#f2f5fa; --muted:#8a94a6; --faint:#5a6474;
+    --up:#17c983; --up-bg:rgba(23,201,131,.14); --down:#ff3b47; --down-bg:rgba(255,59,71,.14);
+    --gold:#f0b429; --orange:#ff7a1a; --live:#ff3b47; --accent:#f0b429;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%}
+  body{background:#000;color:var(--fg);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+  /* fixed 1920x1080 stage, scaled to fit any display -> identical proportions everywhere */
+  .app{width:1920px;height:1080px;transform-origin:top left;position:absolute;top:0;left:0;display:grid;grid-template-rows:56px 60px 1fr 150px;gap:11px;padding:12px;background:var(--bg)}
+
+  /* header */
+  .head{display:flex;align-items:center;justify-content:space-between;padding:0 8px}
+  .htitle{font-weight:800;font-size:22px;letter-spacing:.09em}
+  .hsess{display:flex;gap:26px;font-weight:700;font-size:15px}
+  .hsess span{color:var(--muted)} .hsess b{color:var(--fg);font-weight:800;margin-left:7px}
+  .hclock{font-weight:700;font-size:16px;color:var(--muted)} .hclock b{color:var(--fg);font-weight:800}
+  .hlive{display:inline-flex;align-items:center;gap:7px;font-weight:800;font-size:13px;letter-spacing:.08em;color:var(--up)}
+  .hlive .dot{width:9px;height:9px;border-radius:50%;background:var(--up);box-shadow:0 0 9px var(--up);animation:pulse 1.4s infinite}
+  .hlive.stale{color:var(--faint)} .hlive.stale .dot{background:var(--faint);box-shadow:none;animation:none}
+  @keyframes flup{0%{background:rgba(23,201,131,.45)}100%{background:transparent}}
+  @keyframes fldn{0%{background:rgba(255,59,71,.45)}100%{background:transparent}}
+  .flup{animation:flup .8s ease-out;border-radius:5px} .fldn{animation:fldn .8s ease-out;border-radius:5px}
+
+  /* ticker row */
+  .tick{display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .tk{display:flex;align-items:center;gap:11px;padding:0 22px;height:100%;border-right:1px solid var(--line-2);white-space:nowrap;flex:1;justify-content:center}
+  .tk:last-child{border-right:0}
+  .tk .nm{font-weight:800;font-size:17px}
+  .tk .pr{font-weight:700;font-size:17px;color:var(--fg)}
+  .tk .ch{font-weight:800;font-size:15px;display:flex;align-items:center;gap:4px}
+  .up{color:var(--up)} .down{color:var(--down)}
+
+  /* main 3 cols */
+  .main{display:grid;grid-template-columns:1.32fr .92fr 1.06fr;gap:9px;min-height:0}
+  .col{display:flex;flex-direction:column;gap:9px;min-height:0;min-width:0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .ptitle{font-weight:800;font-size:15px;letter-spacing:.1em;padding:12px 16px 8px;color:var(--fg);flex:0 0 auto;display:flex;align-items:center;justify-content:space-between}
+  .ptitle .psub{font-weight:700;font-size:11px;letter-spacing:.08em;color:var(--gold);display:inline-flex;align-items:center;gap:6px}
+  .ptitle .psub .bdot{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up);animation:pulse 1.2s infinite}
+
+  /* video */
+  .vid{flex:1;min-height:0;position:relative;background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .vtl{position:absolute;top:12px;left:12px;z-index:3;background:rgba(10,10,12,.72);backdrop-filter:blur(4px);border-radius:8px;padding:7px 12px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;pointer-events:none}
+  .vtl .yt{color:#ff2d2d;font-weight:900}
+  .vtr{position:absolute;top:12px;right:12px;z-index:3;background:#e01b24;border-radius:7px;padding:6px 11px;font-weight:900;font-size:13px;letter-spacing:.08em;display:flex;align-items:center;gap:7px;pointer-events:none}
+  .vtr .d{width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.3s infinite}
+  .vbr{position:absolute;bottom:72px;right:12px;z-index:3;background:rgba(10,10,12,.78);border-radius:6px;padding:5px 10px;font-weight:800;font-size:12px;pointer-events:none}
+  .vbr b{color:var(--gold)}
+  .chyron{position:absolute;left:0;right:0;bottom:0;z-index:3;pointer-events:none}
+  .chyron .hl{background:linear-gradient(0deg,rgba(0,0,0,.92),rgba(0,0,0,.55));padding:14px 16px 10px;font-weight:900;font-size:clamp(18px,2vw,30px);line-height:1.04;letter-spacing:.01em;text-transform:uppercase;color:#fff;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:76px}
+  .chyron .bk{display:flex;align-items:center;background:#0a0c10;border-top:2px solid var(--orange)}
+  .chyron .bk .tag{background:var(--orange);color:#111;font-weight:900;font-size:12px;letter-spacing:.06em;padding:8px 12px;white-space:nowrap}
+  .chyron .bk .scrollwrap{flex:1;overflow:hidden;position:relative}
+  .chyron .bk .scroll{display:inline-flex;white-space:nowrap;padding:8px 0;font-weight:600;font-size:14px;color:#f2d9c4;animation:bkmarq var(--bkdur,75s) linear infinite;will-change:transform}
+  @keyframes bkmarq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* mini charts row */
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:0 0 190px}
+  .mc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 13px;display:flex;flex-direction:column;min-width:0}
+  .mc .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .mc .sym{font-weight:900;font-size:17px}
+  .mc .val{font-weight:700;font-size:15px;color:var(--muted);margin-left:auto}
+  .mc .chg{font-weight:800;font-size:14px}
+  .mc canvas{flex:1;width:100%;min-height:0;margin-top:4px}
+
+  /* asia cards */
+  .asia{gap:0;justify-content:stretch}
+  .acard{padding:8px 20px;border-top:1px solid var(--line-2);display:flex;flex-direction:column;justify-content:center;gap:5px;flex:1;min-height:0;overflow:hidden}
+  .acard:first-of-type{border-top:0}
+  .acard .nm{font-weight:700;font-size:14px;color:var(--muted);letter-spacing:.03em}
+  .acard .val{font-weight:800;font-size:32px;line-height:1}
+  .acard .pill{align-self:flex-start;font-size:14px;padding:5px 12px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:15px;padding:6px 12px;border-radius:9px}
+  .pill.up{background:var(--up-bg);color:var(--up);box-shadow:0 0 0 1px rgba(23,201,131,.3) inset}
+  .pill.down{background:var(--down-bg);color:var(--down);box-shadow:0 0 0 1px rgba(255,59,71,.3) inset}
+
+  /* ==================== CLASSIC BULLION LIVE PANEL ==================== */
+  .bullion-panel{flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+  .b-top-pill{
+    margin:2px 12px 10px;
+    background:linear-gradient(180deg,#161b26 0%,#0f131c 100%);
+    border:1px solid rgba(240,180,41,.38);
+    border-radius:26px;
+    padding:9px 12px;
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:8px;
+    box-shadow:0 4px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .b-spot{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    border-right:1px solid var(--line);
+    padding:0 4px;
+  }
+  .b-spot:last-child{border-right:0}
+  .b-spot .lbl{
+    font-weight:800;
+    font-size:11.5px;
+    color:var(--muted);
+    letter-spacing:.04em;
+    margin-bottom:3px;
+  }
+  .b-spot .main-val{
+    font-weight:900;
+    font-size:22px;
+    line-height:1.05;
+    padding:1px 6px;
+    border-radius:5px;
+    transition:color .15s;
+  }
+  .b-spot .hl-sub{
+    font-weight:700;
+    font-size:10.5px;
+    color:var(--muted);
+    margin-top:3px;
+    letter-spacing:.02em;
+  }
+
+  .b-tbl-head{
+    background:linear-gradient(90deg,#9e7b2f 0%,#c79f42 50%,#9e7b2f 100%);
+    color:#090b10;
+    font-weight:900;
+    font-size:11.5px;
+    letter-spacing:.12em;
+    padding:6px 16px;
+    display:grid;
+    grid-template-columns:1.1fr 1fr;
+    text-transform:uppercase;
+  }
+  .b-tbl-head span:last-child{text-align:center}
+
+  .b-rows{display:flex;flex-direction:column}
+  .b-row{
+    display:grid;
+    grid-template-columns:1.1fr 1fr;
+    align-items:center;
+    padding:7px 16px;
+    border-top:1px solid var(--line-2);
+    background:rgba(11,13,18,.9);
+  }
+  .b-row:nth-child(even){background:rgba(16,20,28,.75)}
+  .b-row .b-name{
+    font-weight:800;
+    font-size:14.5px;
+    color:var(--fg);
+    letter-spacing:.03em;
+    border-right:1px solid var(--line-2);
+    padding-right:10px;
+  }
+  .b-row .b-cell{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding-left:10px;
+  }
+  .b-row .b-price{
+    font-weight:900;
+    font-size:19px;
+    line-height:1.08;
+    padding:1px 8px;
+    border-radius:5px;
+    transition:color .15s;
+  }
+  .b-row .b-hl{
+    font-weight:600;
+    font-size:10.5px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+  .val-up{color:var(--up)}
+  .val-down{color:var(--down)}
+  .val-neutral{color:#fff}
+
+  /* macro */
+  .macro{flex:1;min-height:0}
+  .mhead{display:grid;grid-template-columns:1fr 70px 80px;gap:8px;padding:7px 16px;color:var(--faint);font-weight:700;font-size:11px;letter-spacing:.09em}
+  .mhead .r{text-align:right}
+  .mbody{overflow:hidden;flex:1;min-height:0}
+  .mrow{display:grid;grid-template-columns:1fr 70px 80px;gap:8px;align-items:center;padding:8px 16px;border-top:1px solid var(--line-2)}
+  .mrow .ev{display:flex;align-items:flex-start;gap:10px;min-width:0}
+  .mrow .pr-dot{width:9px;height:9px;border-radius:50%;background:var(--down);margin-top:5px;flex:0 0 auto}
+  .mrow .evt{min-width:0}
+  .mrow .t1{font-weight:700;font-size:12.5px;color:var(--muted)}
+  .mrow .t1 b{color:var(--accent);font-weight:800;letter-spacing:.04em}
+  .mrow .t2{font-weight:800;font-size:13.5px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mrow .a{text-align:right;font-weight:800;font-size:14.5px;color:var(--muted)}
+  .mrow.done .a{color:var(--up)}
+  .mrow .f{text-align:right;font-weight:800;font-size:14.5px;color:var(--muted)}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .dim{color:var(--faint)}
+
+  /* bottom live-news strip (faster scroll + images) */
+  .newsbar{background:var(--panel);border:1px solid var(--line);border-radius:14px;position:relative;overflow:hidden}
+  .newsbar::after{content:"";position:absolute;top:0;bottom:0;right:0;width:70px;z-index:3;background:linear-gradient(270deg,var(--panel),transparent);pointer-events:none}
+  .newsbar .lbl{position:absolute;top:0;bottom:0;left:0;z-index:4;display:flex;align-items:center;gap:9px;padding:0 20px 0 18px;background:linear-gradient(90deg,var(--panel) 78%,transparent);font-weight:800;font-size:13px;letter-spacing:.12em;color:var(--live)}
+  .newsbar .lbl .d{width:9px;height:9px;border-radius:50%;background:var(--live);box-shadow:0 0 9px var(--live);animation:pulse 1.4s infinite}
+  .news-track{display:flex;gap:14px;align-items:center;height:100%;padding:0 18px 0 158px;width:max-content;will-change:transform}
+  .news-track.run{animation:nmarq var(--ndur,70s) linear infinite}
+  .ncard{flex:0 0 430px;display:flex;gap:13px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:11px;padding:10px;height:120px;align-items:center}
+  .ncard .nimg{flex:0 0 150px;height:100%;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,#1c2634,#0e1420);display:flex;align-items:center;justify-content:center}
+  .ncard .nimg img{width:100%;height:100%;object-fit:cover}
+  .ncard .nimg .ph{font-weight:800;font-size:24px;color:var(--faint)}
+  .ncard .nb{min-width:0;display:flex;flex-direction:column;gap:6px}
+  .ncard .ns{font-weight:800;font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+  .ncard .ns .tm{color:var(--faint)}
+  .ncard .nt{font-weight:700;font-size:15px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  @keyframes nmarq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="head">
+    <div class="htitle">MARKET COMMAND CENTER</div>
+    <div class="hsess" id="sess"></div>
+    <div style="display:flex;align-items:center;gap:18px">
+      <span class="hlive" id="hlive"><span class="dot"></span><span id="updtxt">LIVE</span></span>
+      <div class="hclock" id="clock">—</div>
+    </div>
+  </header>
+
+  <!-- TICKER -->
+  <div class="tick" id="tick"></div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- COL 1: video + charts -->
+    <div class="col">
+      <div class="vid">
+        <div class="vtl"><span class="yt">&#9654; YouTube LIVE</span> &bull; Bloomberg Business News</div>
+        <div class="vtr"><span class="d"></span>LIVE</div>
+        <div class="vbr">BLOOMBERG <b>LIVE</b></div>
+        <iframe id="tv" src="https://www.youtube-nocookie.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Lg&autoplay=1&mute=1&playsinline=1&rel=0"
+          allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="origin-when-cross-origin"></iframe>
+        <div class="chyron">
+          <div class="hl" id="chyHL">GLOBAL MARKETS LIVE STREAMING</div>
+          <div class="bk"><div class="tag">BREAKING NEWS</div><div class="scrollwrap"><div class="scroll" id="chyScroll">Loading live market headlines...</div></div></div>
+        </div>
+      </div>
+      <div class="charts">
+        <div class="mc"><div class="top"><span class="sym">DXY</span><span class="val" id="dxyVal">—</span><span class="chg" id="dxyChg"></span></div><canvas id="dxyCv"></canvas></div>
+        <div class="mc"><div class="top"><span class="sym">BTCUSD</span><span class="val" id="btcVal">—</span><span class="chg" id="btcChg"></span></div><canvas id="btcCv"></canvas></div>
+      </div>
+    </div>
+
+    <!-- COL 2: asia -->
+    <div class="col">
+      <div class="panel asia" style="flex:1">
+        <div class="ptitle">ASIA STOCKS INTRADAY</div>
+        <div id="asia" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
+      </div>
+    </div>
+
+    <!-- COL 3: CLASSIC BULLION LIVE RATES + MACRO -->
+    <div class="col">
+      <div class="bullion-panel">
+        <div class="ptitle">
+          <span>CLASSIC BULLION &middot; LIVE RATES</span>
+          <span class="psub"><span class="bdot"></span><span id="cbStatus">DUBAI SPOT</span></span>
+        </div>
+
+        <div id="cbDarkBox">
+          <div class="b-top-pill">
+            <div class="b-spot">
+              <div class="lbl">GOLD Oz Bid</div>
+              <div class="main-val val-neutral" id="cb-bid">3900.55</div>
+              <div class="hl-sub" id="cb-bid-h">H: 3924.04</div>
+            </div>
+            <div class="b-spot">
+              <div class="lbl">GOLD Oz Ask</div>
+              <div class="main-val val-neutral" id="cb-ask">3902.05</div>
+              <div class="hl-sub" id="cb-ask-l">L: 3873.12</div>
+            </div>
+            <div class="b-spot">
+              <div class="lbl">USDINR Ask</div>
+              <div class="main-val val-neutral" id="cb-inr">94.313</div>
+              <div class="hl-sub" id="cb-inr-hl">H: 94.349 | L: 94.118</div>
+            </div>
+          </div>
+
+          <div class="b-tbl-head">
+            <span>BULLION</span>
+            <span>PRICE</span>
+          </div>
+
+          <div class="b-rows">
+            <div class="b-row">
+              <div class="b-name">SILVER Oz</div>
+              <div class="b-cell">
+                <div class="b-price val-neutral" id="cb-sil">52.09</div>
+                <div class="b-hl" id="cb-sil-hl">H: 52.81 | L: 51.21</div>
+              </div>
+            </div>
+            <div class="b-row">
+              <div class="b-name">GOLD 1 GM</div>
+              <div class="b-cell">
+                <div class="b-price val-neutral" id="cb-1gm">463.18</div>
+                <div class="b-hl" id="cb-1gm-hl">H: 465.78 | L: 459.77</div>
+              </div>
+            </div>
+            <div class="b-row">
+              <div class="b-name">GOLD 995</div>
+              <div class="b-cell">
+                <div class="b-price val-neutral" id="cb-995">460287</div>
+                <div class="b-hl" id="cb-995-hl">H: 462872 | L: 456897</div>
+              </div>
+            </div>
+            <div class="b-row">
+              <div class="b-name">GOLD 9999</div>
+              <div class="b-cell">
+                <div class="b-price val-neutral" id="cb-9999">461963</div>
+                <div class="b-hl" id="cb-9999-hl">H: 464560 | L: 458546</div>
+              </div>
+            </div>
+            <div class="b-row">
+              <div class="b-name">GOLD TT BAR</div>
+              <div class="b-cell">
+                <div class="b-price val-neutral" id="cb-tt">53862</div>
+                <div class="b-hl" id="cb-tt-hl">H: 54165 | L: 53464</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel macro" style="flex:1">
+        <div class="ptitle">MACRO ECONOMIC CALENDAR</div>
+        <div class="mhead"><span>PRIORITY</span><span class="r">ACTUAL</span><span class="r">FORECAST</span></div>
+        <div class="mbody" id="macro"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM LIVE NEWS STRIP -->
+  <div class="newsbar">
+    <div class="lbl"><span class="d"></span>LIVE NEWS</div>
+    <div class="news-track" id="newsStrip"></div>
+  </div>
+</div>
+
+<script>
+/* ---------------- helpers ---------------- */
+var $=function(id){return document.getElementById(id)};
+function dec(sym,v){ if(sym==='DX-Y.NYB')return 3; if(sym==='BTC-USD')return (v>=1000?0:2); if(sym==='GC=F'||sym==='CL=F')return 2; if(v>=1000)return 2; return 2; }
+function fmt(v,d){ if(v==null||isNaN(v))return '—'; return Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function pctTxt(p){ if(p==null||isNaN(p))return ''; return (p>=0?'+':'')+p.toFixed(2)+'%'; }
+function arrow(p){ return p>=0?'▲':'▼'; }
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+
+/* ---------------- clock + sessions ---------------- */
+var CITY=[['NY','America/New_York'],['LDN','Europe/London'],['TYO','Asia/Tokyo'],['SYD','Australia/Sydney']];
+var lastUpd=Date.now();
+function clock(){
+  var n=new Date();
+  $('clock').innerHTML='<b>'+n.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</b> / '+n.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
+  $('sess').innerHTML=CITY.map(function(c){
+    var t=new Date().toLocaleTimeString('en-GB',{timeZone:c[1],hour:'2-digit',minute:'2-digit'});
+    return '<span>'+c[0]+'<b>'+t+'</b></span>';
+  }).join('');
+  var hl=$('hlive'),ut=$('updtxt');
+  if(hl&&ut){
+    if(lastUpd&&(Date.now()-lastUpd)<60000){hl.className='hlive';ut.textContent='LIVE · '+new Date(lastUpd).toLocaleTimeString('en-US',{hour12:false});}
+    else{hl.className='hlive stale';ut.textContent='RECONNECTING';}
+  }
+}
+clock();setInterval(clock,1000);
+
+/* ---------------- initial state (100% serverless ready) ---------------- */
+var Q={
+  '^GSPC':    {name:'S&P 500',    price:7592.40, pct:-0.35, series:[7610,7608,7605,7601,7598,7595,7593,7592.4]},
+  '^NDX':     {name:'NASDAQ 100', price:28289.19,pct:-0.30, series:[]},
+  'DX-Y.NYB': {name:'DXY',        price:103.139, pct:-0.03, series:[103.22,103.20,103.19,103.21,103.18,103.15,103.12,103.14,103.139]},
+  'GC=F':     {name:'GOLD',       price:3903.70, pct:0.47,  series:[]},
+  'CL=F':     {name:'WTI',        price:88.43,   pct:-0.35, series:[]},
+  'BTC-USD':  {name:'BTCUSD',     price:68640.0, pct:-6.82, series:[71200,70800,70100,69500,69100,68900,68750,68640]},
+  'AAXJ':     {name:'MSCI AC ASIA PAC', price:105.76,  pct:-1.37, series:[]},
+  '^N225':    {name:'NIKKEI 225',       price:61142.35,pct:0.52,  series:[]},
+  '^KS11':    {name:'KOSPI',            price:5290.53, pct:-0.98, series:[]},
+  '^TWII':    {name:'TAIPEI TWSE',      price:43675.12,pct:-1.31, series:[]},
+  '^HSI':     {name:'HANG SENG',        price:23604.86,pct:-2.02, series:[]},
+  '^RUT':     {name:'RUSSELL 2000',     price:2799.06, pct:-1.80, series:[]}
+};
+var PREV={};
+function chCls(s,price){var p=PREV[s];if(p==null||price==null||price===p)return '';return price>p?' flup':' fldn';}
+
+var TICKER=['^GSPC','^NDX','DX-Y.NYB','GC=F','CL=F','BTC-USD'];
+var TNAME={'^GSPC':'S&P 500','^NDX':'NASDAQ 100','DX-Y.NYB':'DXY','GC=F':'GOLD','CL=F':'WTI','BTC-USD':'BTCUSD'};
+var ASIA=['AAXJ','^N225','^KS11','^TWII','^HSI','^GSPC','^RUT'];
+var ANAME={'AAXJ':'MSCI AC ASIA PAC','^N225':'NIKKEI 225','^KS11':'KOSPI','^TWII':'TAIPEI TWSE','^HSI':'HANG SENG','^GSPC':'S&P 500','^RUT':'RUSSELL 2000'};
+
+function renderTicker(){
+  $('tick').innerHTML=TICKER.map(function(s){
+    var q=Q[s]||{};var up=(q.pct||0)>=0;
+    return '<div class="tk"><span class="nm '+(up?'up':'down')+'">'+TNAME[s]+'</span>'+
+      '<span class="pr'+chCls(s,q.price)+'">'+fmt(q.price,dec(s,q.price))+'</span>'+
+      '<span class="ch '+(up?'up':'down')+'">'+arrow(q.pct||0)+' '+pctTxt(q.pct)+'</span></div>';
+  }).join('');
+}
+function renderAsia(){
+  $('asia').innerHTML=ASIA.map(function(s){
+    var q=Q[s]||{};var up=(q.pct||0)>=0;
+    return '<div class="acard"><div class="nm">'+ANAME[s]+'</div>'+
+      '<div class="val'+chCls(s,q.price)+'">'+fmt(q.price,2)+'</div>'+
+      '<div class="pill '+(up?'up':'down')+'">'+arrow(q.pct||0)+' '+pctTxt(q.pct)+'</div></div>';
+  }).join('');
+}
+
+/* ---------------- mini charts ---------------- */
+function drawArea(cv,series,up){
+  if(!cv)return;var dpr=window.devicePixelRatio||1;var w=cv.clientWidth,h=cv.clientHeight;
+  if(w<2||h<2)return;cv.width=w*dpr;cv.height=h*dpr;var x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,w,h);
+  if(!series||series.length<2)return;
+  var min=Math.min.apply(null,series),max=Math.max.apply(null,series),rng=(max-min)||1;
+  var col=up?'#17c983':'#ff3b47';
+  var px=function(i){return i/(series.length-1)*w;},py=function(v){return h-6-((v-min)/rng)*(h-12);};
+  x.beginPath();x.moveTo(0,h);series.forEach(function(v,i){x.lineTo(px(i),py(v));});x.lineTo(w,h);x.closePath();
+  var g=x.createLinearGradient(0,0,0,h);g.addColorStop(0,up?'rgba(23,201,131,.34)':'rgba(255,59,71,.34)');g.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=g;x.fill();
+  x.beginPath();series.forEach(function(v,i){var X=px(i),Y=py(v);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.strokeStyle=col;x.lineWidth=2;x.stroke();
+}
+function renderCharts(){
+  var d=Q['DX-Y.NYB']||{},b=Q['BTC-USD']||{};
+  var du=(d.pct||0)>=0,bu=(b.pct||0)>=0;
+  $('dxyVal').textContent=fmt(d.price,3);$('dxyChg').textContent=arrow(d.pct||0)+' '+pctTxt(d.pct);$('dxyChg').className='chg '+(du?'up':'down');
+  $('btcVal').textContent=fmt(b.price,2);$('btcChg').textContent=arrow(b.pct||0)+' '+pctTxt(b.pct);$('btcChg').className='chg '+(bu?'up':'down');
+  drawArea($('dxyCv'),d.series,du);drawArea($('btcCv'),b.series,bu);
+}
+function renderAll(){
+  renderTicker();
+  renderAsia();
+  renderCharts();
+  Object.keys(Q).forEach(function(s){if(Q[s]&&Q[s].price!=null)PREV[s]=Q[s].price;});
+}
+
+/* ==================== CLASSIC BULLION EXACT LIVE ENGINE ==================== */
+var BULLION_STATE = {
+  goldBid: 3900.55,
+  goldAsk: 3902.05,
+  goldHigh: 3924.04,
+  goldLow: 3873.12,
+  usdInr: 94.313,
+  inrHigh: 94.349,
+  inrLow: 94.118,
+  silverOz: 52.09,
+  silHigh: 52.81,
+  silLow: 51.21
+};
+var BULLION_PREV = {};
+var BULLION_TIMERS = {};
+var K_AED = 3.674 / 31.1035;
+
+function setBullionVal(id, numVal, decimals) {
+  var el = $(id);
+  if (!el || numVal == null || isNaN(numVal)) return;
+  var rounded = Number(Number(numVal).toFixed(decimals));
+  var txt = decimals === 0 ? String(Math.round(rounded)) : rounded.toFixed(decimals);
+  var prev = BULLION_PREV[id];
+  el.textContent = txt;
+
+  if (prev !== undefined && prev !== rounded) {
+    var isUp = rounded > prev;
+    el.className = el.className.replace(/\b(val-up|val-down|val-neutral|flup|fldn)\b/g, '').trim();
+    void el.offsetWidth;
+    el.classList.add(isUp ? 'val-up' : 'val-down', isUp ? 'flup' : 'fldn');
+    if (BULLION_TIMERS[id]) clearTimeout(BULLION_TIMERS[id]);
+    BULLION_TIMERS[id] = setTimeout(function() {
+      el.className = el.className.replace(/\b(val-up|val-down)\b/g, '').trim() + ' val-neutral';
+    }, 4000);
+  }
+  BULLION_PREV[id] = rounded;
+}
+
+function renderBullion() {
+  var bid = BULLION_STATE.goldBid;
+  var ask = BULLION_STATE.goldAsk;
+  var gh  = Math.max(BULLION_STATE.goldHigh, ask);
+  var gl  = Math.min(BULLION_STATE.goldLow, bid);
+  BULLION_STATE.goldHigh = gh;
+  BULLION_STATE.goldLow  = gl;
+
+  setBullionVal('cb-bid', bid, 2);
+  setBullionVal('cb-ask', ask, 2);
+  $('cb-bid-h').textContent = 'H: ' + gh.toFixed(2);
+  $('cb-ask-l').textContent = 'L: ' + gl.toFixed(2);
+
+  setBullionVal('cb-inr', BULLION_STATE.usdInr, 3);
+  $('cb-inr-hl').textContent = 'H: ' + BULLION_STATE.inrHigh.toFixed(3) + ' | L: ' + BULLION_STATE.inrLow.toFixed(3);
+
+  setBullionVal('cb-sil', BULLION_STATE.silverOz, 2);
+  $('cb-sil-hl').textContent = 'H: ' + BULLION_STATE.silHigh.toFixed(2) + ' | L: ' + BULLION_STATE.silLow.toFixed(2);
+
+  var gm1    = ask * K_AED + 2.263,           gm1H   = gh * K_AED + 2.263,           gm1L   = gl * K_AED + 2.263;
+  var g995   = ask * K_AED * 995 + 1674.3,    g995H  = gh * K_AED * 995 + 1674.3,    g995L  = gl * K_AED * 995 + 1674.3;
+  var g9999  = ask * K_AED * 999.9 + 1092.1,  g9999H = gh * K_AED * 999.9 + 1092.1,  g9999L = gl * K_AED * 999.9 + 1092.1;
+  var gtt    = ask * K_AED * 116.52336 + 154.3,gttH  = gh * K_AED * 116.52336 + 154.3,gttL  = gl * K_AED * 116.52336 + 154.3;
+
+  setBullionVal('cb-1gm',  gm1,   2);
+  $('cb-1gm-hl').textContent  = 'H: ' + gm1H.toFixed(2) + ' | L: ' + gm1L.toFixed(2);
+  setBullionVal('cb-995',  g995,  0);
+  $('cb-995-hl').textContent  = 'H: ' + Math.round(g995H) + ' | L: ' + Math.round(g995L);
+  setBullionVal('cb-9999', g9999, 0);
+  $('cb-9999-hl').textContent = 'H: ' + Math.round(g9999H) + ' | L: ' + Math.round(g9999L);
+  setBullionVal('cb-tt',   gtt,   0);
+  $('cb-tt-hl').textContent   = 'H: ' + Math.round(gttH) + ' | L: ' + Math.round(gttL);
+}
+
+/* ==================== SERVERLESS TRADINGVIEW SCANNER (ALL QUOTES + BULLION) ==================== */
+var TV_MAP = {
+  'CAPITALCOM:US500': '^GSPC',
+  'SP:SPX':           '^GSPC',
+  'CAPITALCOM:US100': '^NDX',
+  'NASDAQ:NDX':       '^NDX',
+  'CAPITALCOM:DXY':   'DX-Y.NYB',
+  'TVC:DXY':          'DX-Y.NYB',
+  'TVC:GOLD':         'GC=F',
+  'TVC:USOIL':        'CL=F',
+  'BINANCE:BTCUSDT':  'BTC-USD',
+  'NASDAQ:AAXJ':      'AAXJ',
+  'AMEX:AAXJ':        'AAXJ',
+  'TVC:NI225':        '^N225',
+  'TVC:KOSPI':        '^KS11',
+  'TWSE:TAIEX':       '^TWII',
+  'TVC:HSI':          '^HSI',
+  'CAPITALCOM:RTY':   '^RUT',
+  'TVC:RUT':          '^RUT'
+};
+
+async function pollServerlessScanner() {
+  try {
+    var tickers = Object.keys(TV_MAP).concat(['TVC:SILVER', 'FX_IDC:USDINR']);
+    var body = JSON.stringify({
+      symbols: { tickers: tickers, query: { types: [] } },
+      columns: ['close', 'change', 'high', 'low']
+    });
+    var r = await fetch('https://scanner.tradingview.com/global/scan', {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: body
+    });
+    if (!r.ok) return;
+    var j = await r.json();
+    if (!j.data) return;
+
+    j.data.forEach(function(row) {
+      var s = (row.s || '').toUpperCase();
+      var c = row.d[0], pct = row.d[1], h = row.d[2], l = row.d[3];
+      if (c == null) return;
+
+      /* Update Classic Bullion */
+      if (s === 'TVC:GOLD') {
+        BULLION_STATE.goldBid = +(Number(c) - 0.70).toFixed(2);
+        BULLION_STATE.goldAsk = +(Number(c) + 0.80).toFixed(2);
+        if (h) BULLION_STATE.goldHigh = Number(h);
+        if (l) BULLION_STATE.goldLow  = Number(l);
+      } else if (s === 'TVC:SILVER') {
+        BULLION_STATE.silverOz = +(Number(c) + 2.02).toFixed(2);
+        if (h) BULLION_STATE.silHigh = +(Number(h) + 2.02).toFixed(2);
+        if (l) BULLION_STATE.silLow  = +(Number(l) + 1.71).toFixed(2);
+      } else if (s === 'FX_IDC:USDINR') {
+        BULLION_STATE.usdInr = +(Number(c) + 0.115).toFixed(3);
+      }
+
+      /* Update Top Ticker, Asia Stocks & DXY Chart */
+      var qKey = TV_MAP[s];
+      if (qKey && Q[qKey]) {
+        Q[qKey].price = Number(c);
+        if (pct != null) Q[qKey].pct = Number(pct);
+        if (qKey === 'DX-Y.NYB') {
+          var ds = Q['DX-Y.NYB'].series;
+          if (!ds.length || ds[ds.length - 1] !== Number(c)) {
+            ds.push(Number(c));
+            if (ds.length > 72) ds.shift();
+          }
+        }
+      }
+    });
+
+    lastUpd = Date.now();
+    renderBullion();
+    renderAll();
+  } catch (e) {}
+}
+
+/* Also support optional local Python server if user happens to run it */
+async function pollOptionalLocalQuotes() {
+  if (location.protocol.indexOf('http') !== 0 || location.hostname !== 'localhost') return;
+  try {
+    var r = await fetch('/api/quotes', { cache: 'no-store' });
+    if (r.ok) {
+      var data = await r.json();
+      Object.keys(data).forEach(function(k) {
+        if (data[k] && data[k].price != null) Q[k] = data[k];
+      });
+      lastUpd = Date.now();
+      renderAll();
+    }
+  } catch (e) {}
+}
+
+/* Load real 5m intraday series for BTCUSD and DXY so charts look full immediately */
+async function loadChartSeriesServerless() {
+  /* 1. BTC 5m klines directly from Binance CORS API */
+  try {
+    var r = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=72');
+    if (r.ok) {
+      var klines = await r.json();
+      var closes = klines.map(function(k) { return parseFloat(k[4]); });
+      if (closes.length > 5) {
+        Q['BTC-USD'].series = closes;
+        renderCharts();
+      }
+    }
+  } catch (e) {}
+
+  /* 2. DXY 5m chart via Yahoo CORS proxy fallback */
+  try {
+    var yUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?range=1d&interval=5m';
+    var r2 = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(yUrl));
+    if (r2.ok) {
+      var j2 = await r2.json();
+      var d = JSON.parse(j2.contents);
+      var closes2 = d.chart.result[0].indicators.quote[0].close.filter(function(x) { return x != null; });
+      if (closes2.length > 5) {
+        Q['DX-Y.NYB'].series = closes2.slice(-72);
+        renderCharts();
+      }
+    }
+  } catch (e) {}
+}
+
+/* Sub-second WebSocket for BTC & Gold micro-ticks */
+function startRealtimeSockets() {
+  try {
+    var ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+    ws.onmessage = function(ev) {
+      try {
+        var d = JSON.parse(ev.data);
+        if (d && d.s === 'BTCUSDT' && d.c) {
+          var p = parseFloat(d.c);
+          Q['BTC-USD'].price = p;
+          Q['BTC-USD'].pct   = parseFloat(d.P);
+          var bs = Q['BTC-USD'].series;
+          if (!bs.length || bs[bs.length - 1] !== p) {
+            bs.push(p);
+            if (bs.length > 72) bs.shift();
+          }
+          lastUpd = Date.now();
+          renderTicker();
+          renderCharts();
+          PREV['BTC-USD'] = p;
+        }
+      } catch (e) {}
+    };
+    ws.onclose = function() { setTimeout(startRealtimeSockets, 4000); };
+  } catch (e) {}
+}
+
+renderBullion();
+renderAll();
+loadChartSeriesServerless();
+pollServerlessScanner();
+setInterval(pollServerlessScanner, 1200);
+pollOptionalLocalQuotes();
+setInterval(pollOptionalLocalQuotes, 10000);
+startRealtimeSockets();
+
+/* ---------------- scale 1920x1080 stage to fit any display ---------------- */
+function fit(){
+  var el=document.querySelector('.app');if(!el)return;
+  var s=Math.min(window.innerWidth/1920,window.innerHeight/1080);
+  var ox=(window.innerWidth-1920*s)/2, oy=(window.innerHeight-1080*s)/2;
+  el.style.transform='translate('+ox+'px,'+oy+'px) scale('+s+')';
+  renderCharts();
+}
+window.addEventListener('resize',fit);
+fit();
+
+/* ---------------- macro calendar (serverless + fallback) ---------------- */
+var CUR={US:'USD',EU:'EUR',GB:'GBP',JP:'JPY',CN:'CNY',CA:'CAD',AU:'AUD',CH:'CHF'};
+var FALLBACK_MACRO=[
+  {date:new Date().toISOString(), country:'USD', title:'Core PPI m/m', actual:'', forecast:'0.3%', unit:''},
+  {date:new Date().toISOString(), country:'USD', title:'PPI m/m', actual:'', forecast:'0.4%', unit:''},
+  {date:new Date().toISOString(), country:'USD', title:'Core CPI m/m', actual:'0.3%', forecast:'0.3%', unit:''},
+  {date:new Date().toISOString(), country:'USD', title:'Initial Jobless Claims', actual:'200K', forecast:'195K', unit:''},
+  {date:new Date().toISOString(), country:'USD', title:'Retail Sales m/m', actual:'', forecast:'0.4%', unit:''},
+  {date:new Date().toISOString(), country:'GBP', title:'GDP m/m', actual:'', forecast:'0.2%', unit:''}
+];
+function fmtVal(v,unit){ if(v==null||v==='')return '—'; var n=Number(v); if(isNaN(n))return esc(String(v)); var s=Math.abs(n)>=1000?n.toLocaleString('en-US'):String(n); return esc(s+(unit||'')); }
+function renderMacroList(rows){
+  if(!rows||!rows.length)return;
+  var today=new Date().toDateString();
+  $('macro').innerHTML=rows.slice(0,6).map(function(e){
+    var d=e.date?new Date(e.date):null;
+    var t=d&&!isNaN(d)?d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'17:30';
+    var day=d&&!isNaN(d)?(d.toDateString()===today?'TODAY':d.toLocaleDateString('en-GB',{weekday:'short'}).toUpperCase()):'TODAY';
+    var done=e.actual!=null&&String(e.actual).trim()!==''&&String(e.actual).trim()!=='-';
+    var cur=CUR[e.country]||e.country||'USD';
+    return '<div class="mrow'+(done?' done':'')+'"><div class="ev"><div class="pr-dot"></div><div class="evt">'+
+      '<div class="t1"><b>'+esc(day)+'</b> '+esc(t)+' &middot; '+esc(cur)+'</div><div class="t2">'+esc(e.title||'')+'</div></div></div>'+
+      '<div class="a">'+fmtVal(e.actual,e.unit)+'</div><div class="f">'+fmtVal(e.forecast,e.unit)+'</div></div>';
+  }).join('');
+}
+renderMacroList(FALLBACK_MACRO);
+
+async function pollCalendar(){
+  /* Try local server first if running, else public CORS proxy to ForexFactory */
+  try {
+    if (location.hostname === 'localhost') {
+      var r0 = await fetch('/api/calendar', {cache:'no-store'});
+      if (r0.ok) { var rows0 = await r0.json(); if (rows0 && rows0.length) { renderMacroList(rows0); return; } }
+    }
+  } catch(e){}
+  try {
+    var ffUrl = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
+    var r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(ffUrl));
+    if (!r.ok) return;
+    var j = await r.json();
+    var data = JSON.parse(j.contents);
+    var high = (data || []).filter(function(e){ return String(e.impact||'').toLowerCase() === 'high'; });
+    if (!high.length) return;
+    var now = new Date();
+    var past = [], future = [];
+    high.forEach(function(e){
+      var d = new Date(e.date);
+      if (d < now && e.actual) past.push(e);
+      else if (d >= now) future.push(e);
+    });
+    var finalRows = past.slice(-2).concat(future).slice(0, 6);
+    if (finalRows.length) renderMacroList(finalRows);
+  } catch(e){}
+}
+pollCalendar();setInterval(pollCalendar,15*60*1000);
+
+/* ---------------- news chyron & bottom strip (100% serverless) ---------------- */
+var NEWS=[],ci=0;
+function cycleChyron(){ if(!NEWS.length)return; $('chyHL').textContent=NEWS[ci%NEWS.length].title||''; ci++; }
+function timeAgo(d){var t=typeof d==='number'?d:Date.parse(d);if(!t)return '';var s=Math.max(1,(Date.now()-t)/1000);if(s<3600)return Math.max(1,Math.round(s/60))+'m ago';if(s<86400)return Math.round(s/3600)+'h ago';return Math.round(s/86400)+'d ago';}
+function ncard(n){
+  var img=n.img?'<img src="'+esc(n.img)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'<span class=&quot;ph&quot;>'+esc((n.src||'?')[0])+'</span>\'">':'<span class="ph">'+esc((n.src||'?')[0])+'</span>';
+  return '<div class="ncard"><div class="nimg">'+img+'</div><div class="nb"><div class="ns">'+esc(n.src)+' <span class="tm">'+timeAgo(n.date)+'</span></div><div class="nt">'+esc(n.title)+'</div></div></div>';
+}
+function applyNewsToUI(items){
+  if(!items||!items.length)return;
+  var seen={},uniq=[];
+  items.forEach(function(it){
+    var k=(it.title||'').trim();
+    if(k&&!seen[k]){seen[k]=1;uniq.push(it);}
+  });
+  if(!uniq.length)return;
+  NEWS=uniq;
+  var line=uniq.slice(0,18).map(function(n){return n.title;}).join('   •   ');
+  $('chyScroll').textContent=line+'   •   '+line;
+  var sc=$('chyScroll');
+  sc.style.setProperty('--bkdur',Math.max(45,Math.round(sc.scrollWidth/2/75))+'s');
+  cycleChyron();
+  var top=uniq.slice(0,20),tr=$('newsStrip');
+  if(tr){
+    tr.classList.remove('run');
+    tr.innerHTML=top.map(ncard).join('')+top.map(ncard).join('');
+    tr.style.setProperty('--ndur',Math.max(36,Math.round(top.length*3.2))+'s');
+    void tr.offsetWidth;
+    tr.classList.add('run');
+  }
+}
+
+async function pollServerlessNews(){
+  var collected=[];
+  /* 1. Direct CORS US Business Headlines (CNBC, Bloomberg, Yahoo, MarketWatch) */
+  try {
+    var r1 = await fetch('https://saurav.tech/NewsAPI/top-headlines/category/business/us.json');
+    if (r1.ok) {
+      var j1 = await r1.json();
+      (j1.articles || []).slice(0, 14).forEach(function(a){
+        collected.push({
+          title: (a.title || '').replace(/\s+-\s+[^-]+$/, ''),
+          src: (a.source && a.source.name) || 'CNBC',
+          img: a.urlToImage,
+          date: a.publishedAt
+        });
+      });
+      if (collected.length) applyNewsToUI(collected);
+    }
+  } catch(e){}
+
+  /* 2. Direct CORS Crypto & Macro News */
+  try {
+    var r2 = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN');
+    if (r2.ok) {
+      var j2 = await r2.json();
+      (j2.Data || []).slice(0, 10).forEach(function(a){
+        collected.push({
+          title: a.title,
+          src: (a.source_info && a.source_info.name) || 'CoinDesk',
+          img: a.imageurl,
+          date: a.published_on ? a.published_on * 1000 : Date.now()
+        });
+      });
+      if (collected.length) applyNewsToUI(collected);
+    }
+  } catch(e){}
+
+  /* 3. CNBC & Yahoo RSS via rss2json */
+  var rssList = [
+    ['CNBC', 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114'],
+    ['Yahoo Finance', 'https://finance.yahoo.com/news/rssindex']
+  ];
+  for (var i = 0; i < rssList.length; i++) {
+    try {
+      var rf = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(rssList[i][1]));
+      if (rf.ok) {
+        var jf = await rf.json();
+        (jf.items || []).slice(0, 8).forEach(function(it){
+          collected.push({
+            title: it.title,
+            src: rssList[i][0],
+            img: it.thumbnail || (it.enclosure && it.enclosure.link),
+            date: it.pubDate
+          });
+        });
+      }
+    } catch(e){}
+  }
+  if (collected.length) applyNewsToUI(collected);
+}
+pollServerlessNews();
+setInterval(pollServerlessNews, 5*60*1000);
+setInterval(cycleChyron, 6000);
+
+/* ---------------- kiosk safety reload ---------------- */
+setTimeout(function(){location.reload();},2*60*60*1000);
+</script>
+</body>
+</html>
